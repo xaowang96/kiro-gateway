@@ -43,6 +43,7 @@ from kiro.config import (
     FIRST_TOKEN_MAX_RETRIES,
     FAKE_REASONING_ENABLED,
     FAKE_REASONING_HANDLING,
+    CLIENT_CONTEXT_WINDOW,
 )
 from kiro.thinking_parser import ThinkingParser
 
@@ -342,19 +343,27 @@ def calculate_tokens_from_context_usage(
 ) -> Tuple[int, int, str, str]:
     """
     Calculate token counts from Kiro's context usage percentage.
-    
+
+    Kiro returns contextUsagePercentage relative to the model's TRUE context
+    window. We convert it back to a token count using CLIENT_CONTEXT_WINDOW
+    (the window the client assumes, 200k for Claude Code) rather than the
+    model's real window. This keeps the client-computed percentage equal to
+    Kiro's real percentage and makes auto-compaction fire near the model's real
+    capacity. See CLIENT_CONTEXT_WINDOW in kiro.config and
+    anthropics/claude-code#68522 for the full rationale.
+
     Args:
         context_usage_percentage: Context usage percentage from Kiro API
         completion_tokens: Number of completion tokens (counted via tiktoken)
-        model_cache: Model cache for getting max input tokens
-        model: Model name
-    
+        model_cache: Model cache (kept for signature compatibility; not used for
+            scaling — see note above)
+        model: Model name (kept for signature compatibility; not used for scaling)
+
     Returns:
         Tuple of (prompt_tokens, total_tokens, prompt_source, total_source)
     """
     if context_usage_percentage is not None and context_usage_percentage > 0:
-        max_input_tokens = model_cache.get_max_input_tokens(model)
-        total_tokens = int((context_usage_percentage / 100) * max_input_tokens)
+        total_tokens = int((context_usage_percentage / 100) * CLIENT_CONTEXT_WINDOW)
         prompt_tokens = max(0, total_tokens - completion_tokens)
         return prompt_tokens, total_tokens, "subtraction", "API Kiro"
     

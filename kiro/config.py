@@ -305,6 +305,26 @@ MODEL_CACHE_TTL: int = 3600
 # Default maximum number of input tokens
 DEFAULT_MAX_INPUT_TOKENS: int = 200000
 
+# Client-facing context window used to convert Kiro's contextUsagePercentage into
+# a token count for the usage we report back to clients.
+#
+# WHY THIS IS NOT the model's real window (e.g. 1M for Opus):
+# Kiro returns contextUsagePercentage relative to the model's TRUE window. Clients
+# (notably Claude Code) do NOT know the true window for a custom/gateway model id and
+# hardcode a 200k window for both the status line and auto-compaction
+# (see anthropics/claude-code#68522 — there is currently no client-side way to declare
+# a >200k window for a custom ANTHROPIC_BASE_URL model).
+#
+# The client displays: reported_tokens / <its assumed window>. To make that display
+# equal Kiro's REAL percentage — and to make auto-compaction fire near the model's real
+# capacity instead of prematurely — we must scale the percentage by the SAME window the
+# client divides by. Scaling by the model's real 1M window would inflate the shown
+# percentage ~5x (e.g. real 12.6% -> shown 63%) and trigger compaction at ~20% of the
+# real window.
+#
+# Keep this in sync with the context window the client assumes (200k for Claude Code).
+CLIENT_CONTEXT_WINDOW: int = int(os.getenv("CLIENT_CONTEXT_WINDOW", "200000"))
+
 # ==================================================================================================
 # Tool Description Handling (Kiro API Limitations)
 # ==================================================================================================

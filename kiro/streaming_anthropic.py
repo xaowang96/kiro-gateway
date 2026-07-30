@@ -49,7 +49,12 @@ from kiro.streaming_core import (
 )
 from kiro.tokenizer import count_tokens, estimate_request_tokens
 from kiro.parsers import parse_bracket_tool_calls, deduplicate_tool_calls
-from kiro.config import FIRST_TOKEN_TIMEOUT, FIRST_TOKEN_MAX_RETRIES, FAKE_REASONING_HANDLING
+from kiro.config import (
+    FIRST_TOKEN_TIMEOUT,
+    FIRST_TOKEN_MAX_RETRIES,
+    FAKE_REASONING_HANDLING,
+    CLIENT_CONTEXT_WINDOW,
+)
 
 if TYPE_CHECKING:
     from kiro.auth import KiroAuthManager
@@ -180,7 +185,20 @@ async def stream_kiro_to_anthropic(
             system_prompt=request_system,
             apply_claude_correction=False
         )
-        input_tokens = request_token_stats["total_tokens"]
+        estimated_input_tokens = request_token_stats["total_tokens"]
+        # Compress the reported input_tokens to the client's assumed context window
+        # (CLIENT_CONTEXT_WINDOW, 200k for Claude Code) so the client's fixed-window
+        # math reflects the model's TRUE window. Claude Code hardcodes a 200k window for
+        # custom/gateway model ids and derives its context % + auto-compaction from the
+        # input_tokens we send here (message_start), which it does NOT update for the rest
+        # of the turn. Without this scaling a 1M-window model shows ~5x inflated usage and
+        # auto-compacts at ~20% of the real window. See CLIENT_CONTEXT_WINDOW in kiro.config
+        # and anthropics/claude-code#68522.
+        true_window = model_cache.get_max_input_tokens(model)
+        if true_window and true_window > 0:
+            input_tokens = int(estimated_input_tokens * CLIENT_CONTEXT_WINDOW / true_window)
+        else:
+            input_tokens = estimated_input_tokens
     
     # Track content blocks - thinking block is index 0, text block is index 1 (when thinking enabled)
     current_block_index = 0

@@ -970,28 +970,33 @@ class TestCalculateTokensFromContextUsage:
         assert prompt_tokens >= 0
         print("✓ Negative prompt tokens prevented")
     
-    def test_uses_model_specific_max_tokens(self, mock_model_cache):
+    def test_uses_client_context_window_not_model_cache(self, mock_model_cache):
         """
-        What it does: Uses model-specific max input tokens.
-        Goal: Verify model cache is queried correctly.
+        What it does: Scales by CLIENT_CONTEXT_WINDOW, ignoring the model's real window.
+        Goal: Verify the reverse-calc is decoupled from model_cache so the
+              client-computed percentage equals Kiro's real percentage
+              (see anthropics/claude-code#68522).
         """
-        print("Setup: Different max tokens for model...")
-        mock_model_cache.get_max_input_tokens.return_value = 100000  # Different from default
+        from kiro.config import CLIENT_CONTEXT_WINDOW
+
+        print("Setup: model cache reports a huge (1M) window, which must be IGNORED...")
+        mock_model_cache.get_max_input_tokens.return_value = 1000000  # e.g. Opus real window
         context_usage_percentage = 10.0
         completion_tokens = 100
-        
+
         print("Action: Calculating tokens...")
         prompt_tokens, total_tokens, prompt_source, total_source = calculate_tokens_from_context_usage(
-            context_usage_percentage, completion_tokens, mock_model_cache, "claude-haiku-3"
+            context_usage_percentage, completion_tokens, mock_model_cache, "claude-opus-4.8"
         )
-        
-        # 10% of 100000 = 10000 total tokens
-        print(f"Comparing total_tokens: Expected 10000, Got {total_tokens}")
-        assert total_tokens == 10000
-        
-        # Verify model cache was called with correct model
-        mock_model_cache.get_max_input_tokens.assert_called_with("claude-haiku-3")
-        print("✓ Model-specific max tokens used correctly")
+
+        # Must scale by CLIENT_CONTEXT_WINDOW (200000), NOT the model's 1M window.
+        expected_total = int((context_usage_percentage / 100) * CLIENT_CONTEXT_WINDOW)
+        print(f"Comparing total_tokens: Expected {expected_total}, Got {total_tokens}")
+        assert total_tokens == expected_total
+
+        # Model cache must NOT be used as the scaling source anymore.
+        mock_model_cache.get_max_input_tokens.assert_not_called()
+        print("✓ Client context window used; model cache ignored for scaling")
     
     def test_small_percentage_calculation(self, mock_model_cache):
         """
