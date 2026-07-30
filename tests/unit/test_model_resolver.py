@@ -43,6 +43,7 @@ def mock_model_cache():
         "claude-sonnet-4": {"modelId": "claude-sonnet-4", "modelName": "Claude Sonnet 4"},
         "claude-haiku-4.5": {"modelId": "claude-haiku-4.5", "modelName": "Claude Haiku 4.5"},
         "claude-opus-4.5": {"modelId": "claude-opus-4.5", "modelName": "Claude Opus 4.5"},
+        "claude-opus-5": {"modelId": "claude-opus-5", "modelName": "Claude Opus 5"},
     }
     return cache
 
@@ -424,6 +425,10 @@ class TestNormalizeModelNameParametrized:
         ("claude-sonnet-4-5-20250929", "claude-sonnet-4.5"),
         ("claude-opus-4-5", "claude-opus-4.5"),
         ("claude-opus-4-5-20251101", "claude-opus-4.5"),
+        ("claude-opus-5", "claude-opus-5"),
+        ("claude-opus-5-20260101", "claude-opus-5"),
+        ("claude-opus-5-1", "claude-opus-5.1"),
+        ("claude-opus-5-1-20260101", "claude-opus-5.1"),
         # Without minor version
         ("claude-sonnet-4", "claude-sonnet-4"),
         ("claude-sonnet-4-20250514", "claude-sonnet-4"),
@@ -781,6 +786,37 @@ class TestModelResolverResolve:
         
         print(f"Comparing internal_id: Expected 'auto', Got '{result.internal_id}'")
         assert result.internal_id == "auto"
+        
+        print(f"Comparing source: Expected 'cache', Got '{result.source}'")
+        assert result.source == "cache"
+    
+    def test_resolve_opus_5_from_cache(self, model_resolver):
+        """
+        What it does: Resolves 'claude-opus-5' from cache.
+        Goal: Check that Opus 5 is in cache and resolved as-is.
+        """
+        print("Action: Resolving 'claude-opus-5'...")
+        result = model_resolver.resolve("claude-opus-5")
+        
+        print(f"Comparing internal_id: Expected 'claude-opus-5', Got '{result.internal_id}'")
+        assert result.internal_id == "claude-opus-5"
+        
+        print(f"Comparing source: Expected 'cache', Got '{result.source}'")
+        assert result.source == "cache"
+        
+        print(f"Comparing is_verified: Expected True, Got {result.is_verified}")
+        assert result.is_verified is True
+    
+    def test_resolve_opus_5_normalizes_date_suffix(self, model_resolver):
+        """
+        What it does: Resolves 'claude-opus-5-20260101' (with date suffix).
+        Goal: Check that date suffix is stripped and model is found in cache.
+        """
+        print("Action: Resolving 'claude-opus-5-20260101'...")
+        result = model_resolver.resolve("claude-opus-5-20260101")
+        
+        print(f"Comparing normalized: Expected 'claude-opus-5', Got '{result.normalized}'")
+        assert result.normalized == "claude-opus-5"
         
         print(f"Comparing source: Expected 'cache', Got '{result.source}'")
         assert result.source == "cache"
