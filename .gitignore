@@ -23,6 +23,10 @@ build/
 debug_logs*/
 debug*.json
 
+# Runtime artifacts
+logs/
+.omo/
+
 # Project-specific
 _notes/
 requests/
