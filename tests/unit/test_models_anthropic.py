@@ -392,6 +392,34 @@ class TestContentBlockUnion:
 # Tests for AnthropicMessage with Image Content (Issue #30 fix verification)
 # ==================================================================================================
 
+class TestAnthropicMessageSystemRole:
+    """Tests for AnthropicMessage accepting system role."""
+
+    def test_system_role_validates(self):
+        """
+        What it does: Verifies AnthropicMessage accepts role="system".
+        Purpose: Claude Code injects system-reminder messages with role="system"
+        in the messages array. The gateway must accept these (core converter
+        normalizes them to "user" before sending to Kiro).
+        """
+        message = AnthropicMessage(role="system", content="System reminder")
+
+        assert message.role == "system"
+        assert message.content == "System reminder"
+
+    def test_user_role_still_validates(self):
+        message = AnthropicMessage(role="user", content="Hi")
+
+        assert message.role == "user"
+
+    def test_assistant_role_still_validates(self):
+        message = AnthropicMessage(role="assistant", content="Hello")
+
+        assert message.role == "assistant"
+
+
+# ==================================================================================================
+
 class TestAnthropicMessageWithImages:
     """
     Tests for AnthropicMessage with image content.
